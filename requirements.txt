@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+websockets
+psutil
+pyttsx3
+requests
+google-genai

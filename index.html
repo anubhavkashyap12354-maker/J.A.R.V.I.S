@@ -1,0 +1,2315 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050d16">
+  <title>J.A.R.V.I.S. | Personal Interface</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050b12;
+      --panel: rgba(8, 23, 34, .76);
+      --line: rgba(94, 226, 255, .25);
+      --cyan: #63e7ff;
+      --muted: #7b9aa8;
+      --white: #e6fbff;
+      --glow: 0 0 18px rgba(64, 219, 255, .22);
+      font-family: "Segoe UI", "Aptos", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      position: relative;
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--white);
+      background:
+        radial-gradient(ellipse at 50% 44%, rgba(15, 74, 95, .24), transparent 38%),
+        radial-gradient(ellipse at 50% 100%, rgba(7, 52, 72, .25), transparent 48%),
+        var(--bg);
+      letter-spacing: .04em;
+    }
+
+    #reactor-canvas {
+      position: fixed;
+      z-index: 0;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: auto;
+      touch-action: none;
+      opacity: .82;
+    }
+
+    .hud-panel {
+      position: fixed;
+      z-index: 2;
+      border: 1px solid rgba(99, 231, 255, .28);
+      background: rgba(4, 17, 27, .68);
+      box-shadow: 0 0 28px rgba(30, 193, 225, .12), inset 0 0 22px rgba(30, 193, 225, .04);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+    }
+
+    .hud-status {
+      top: 24px;
+      left: 24px;
+      min-width: 250px;
+      padding: 15px 18px;
+    }
+
+    .hud-telemetry {
+      top: 24px;
+      right: 24px;
+      width: 260px;
+      padding: 15px 18px;
+    }
+
+    .hud-kicker, .gauge-label, .hud-actions-title {
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    .hud-kicker {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 10px;
+    }
+
+    .hud-pulse {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #83ffd1;
+      box-shadow: 0 0 12px #83ffd1;
+      animation: hud-pulse 1.5s ease-in-out infinite;
+    }
+
+    .hud-pulse.offline {
+      background: #ff7790;
+      box-shadow: 0 0 12px #ff7790;
+      animation: none;
+    }
+
+    .hud-core-status {
+      color: var(--white);
+      font-size: 12px;
+      letter-spacing: .12em;
+    }
+
+    .hud-core-status strong {
+      color: #83ffd1;
+      font-weight: 500;
+    }
+
+    .hud-core-status .hud-listening { color: var(--cyan); }
+
+    .gauge + .gauge { margin-top: 15px; }
+
+    .gauge-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 7px;
+    }
+
+    .gauge-value {
+      color: var(--cyan);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .gauge-track {
+      height: 4px;
+      overflow: hidden;
+      background: rgba(145, 205, 221, .12);
+    }
+
+    .gauge-fill {
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, #1cb9d8, #8af5ff);
+      box-shadow: 0 0 12px rgba(99, 231, 255, .8);
+      transition: width .45s ease;
+    }
+
+    .hud-console {
+      bottom: 110px;
+      left: 50%;
+      width: min(620px, calc(100vw - 440px));
+      min-width: 330px;
+      padding: 12px 15px 10px;
+      transform: translateX(-50%);
+    }
+
+    .transcript-feed {
+      display: flex;
+      max-height: 112px;
+      min-height: 54px;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+      margin-top: 9px;
+      color: #b8d8e1;
+      font-size: 10px;
+      letter-spacing: .04em;
+      line-height: 1.5;
+      scrollbar-color: rgba(99, 231, 255, .35) transparent;
+      scrollbar-width: thin;
+    }
+
+    .transcript-line { overflow-wrap: anywhere; }
+    .transcript-line time { margin-right: 8px; color: #608896; }
+    .transcript-line strong { color: var(--cyan); font-weight: 500; }
+
+    .hud-actions {
+      right: 24px;
+      bottom: 24px;
+      display: grid;
+      width: 194px;
+      gap: 8px;
+      padding: 14px;
+    }
+
+    .hud-actions-title { margin-bottom: 2px; }
+
+    .hud-action {
+      min-height: 34px;
+      border: 1px solid rgba(99, 231, 255, .3);
+      color: #c9f5ff;
+      background: rgba(18, 73, 91, .32);
+      font-size: 9px;
+      letter-spacing: .12em;
+      text-align: left;
+      cursor: pointer;
+      transition: background .2s, border-color .2s, box-shadow .2s;
+    }
+
+    .hud-action:hover, .hud-action[aria-pressed="true"] {
+      border-color: rgba(99, 231, 255, .7);
+      background: rgba(28, 122, 147, .48);
+      box-shadow: 0 0 14px rgba(99, 231, 255, .18);
+    }
+
+    .hud-action:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    body::before {
+      position: fixed;
+      z-index: -1;
+      inset: 0;
+      content: "";
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(99, 231, 255, .12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 231, 255, .12) 1px, transparent 1px);
+      background-size: 54px 54px;
+      mask-image: linear-gradient(to bottom, transparent, #000 20%, #000 82%, transparent);
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      width: min(1440px, 100%);
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 28px clamp(18px, 4vw, 58px) 24px;
+      display: flex;
+      flex-direction: column;
+      pointer-events: none;
+    }
+
+    .shell > .topbar, .shell > main, .shell > #statusLine, .shell > .footer { display: none; }
+
+    .topbar, .footer, .section-heading, .status-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: .2em;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 34px;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid var(--cyan);
+      border-radius: 50%;
+      color: var(--cyan);
+      box-shadow: inset 0 0 12px rgba(99, 231, 255, .2), var(--glow);
+      font-size: 11px;
+    }
+
+    .top-meta {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .online-dot, .tiny-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(340px, 1.45fr) minmax(220px, 1fr);
+      align-items: center;
+      gap: clamp(12px, 3vw, 48px);
+      padding: 26px 0;
+    }
+
+    .side-column {
+      display: grid;
+      gap: 16px;
+    }
+
+    .panel {
+      position: relative;
+      padding: 17px 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(10, 32, 45, .82), var(--panel));
+      box-shadow: var(--glow);
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    }
+
+    .panel::after {
+      position: absolute;
+      top: 0;
+      right: 14px;
+      width: 35px;
+      height: 1px;
+      content: "";
+      background: var(--cyan);
+      box-shadow: 0 0 9px var(--cyan);
+    }
+
+    .panel-label {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    .metric {
+      color: var(--cyan);
+      font-size: 23px;
+      font-weight: 300;
+      letter-spacing: .08em;
+    }
+
+    .metric small {
+      margin-left: 4px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .subtext {
+      margin: 7px 0 0;
+      color: #89a9b7;
+      font-size: 10px;
+      letter-spacing: .07em;
+      line-height: 1.6;
+    }
+
+    .wave-bars {
+      display: flex;
+      height: 43px;
+      align-items: center;
+      gap: 4px;
+      margin-top: 13px;
+    }
+
+    .wave-bars i {
+      width: 3px;
+      height: var(--h);
+      border-radius: 2px;
+      background: linear-gradient(to top, rgba(73, 197, 232, .2), var(--cyan));
+      box-shadow: 0 0 7px rgba(99, 231, 255, .48);
+      animation: equalize .8s ease-in-out infinite alternate;
+      animation-delay: var(--d);
+    }
+
+    .orb-stage {
+      position: relative;
+      min-height: 480px;
+      display: grid;
+      place-items: center;
+      perspective: 900px;
+    }
+
+    .orb {
+      position: relative;
+      width: min(280px, 64vw);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      transform-style: preserve-3d;
+      animation: float 5s ease-in-out infinite;
+    }
+
+    .orb { display: none; }
+
+    .core {
+      position: relative;
+      z-index: 2;
+      width: 49%;
+      aspect-ratio: 1;
+      border: 1px solid rgba(141, 246, 255, .92);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 36% 30%, #e9ffff 0, #9df8ff 4%, #32c8e9 17%, #0a607b 43%, #073044 65%, rgba(3, 15, 25, .5) 73%);
+      box-shadow:
+        0 0 18px 5px rgba(90, 231, 255, .57),
+        0 0 66px 22px rgba(32, 187, 232, .27),
+        inset -14px -18px 26px rgba(1, 13, 22, .72),
+        inset 8px 8px 18px rgba(218, 255, 255, .48);
+      animation: pulse 3.5s ease-in-out infinite;
+    }
+
+    .core::after {
+      position: absolute;
+      inset: 15%;
+      content: "";
+      border: 1px solid rgba(204, 255, 255, .5);
+      border-radius: 50%;
+      box-shadow: inset 0 0 15px rgba(201, 255, 255, .3), 0 0 13px rgba(201, 255, 255, .4);
+    }
+
+    .ring {
+      position: absolute;
+      width: 88%;
+      height: 32%;
+      border: 1px solid rgba(99, 231, 255, .64);
+      border-radius: 50%;
+      box-shadow: 0 0 13px rgba(67, 211, 255, .34), inset 0 0 12px rgba(67, 211, 255, .19);
+    }
+
+    .ring.one { transform: rotateX(69deg) rotateZ(-22deg); }
+    .ring.two { width: 96%; height: 43%; transform: rotateX(73deg) rotateZ(58deg); border-color: rgba(121, 243, 255, .38); }
+    .ring.three { width: 74%; height: 74%; border-style: dashed; border-color: rgba(99, 231, 255, .3); transform: rotateY(72deg) rotateX(12deg); animation: spin 30s linear infinite; }
+
+    .orbit-dot {
+      position: absolute;
+      z-index: 3;
+      top: 22%;
+      right: 19%;
+      width: 8px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: #d8ffff;
+      box-shadow: 0 0 14px 4px var(--cyan);
+    }
+
+    .orb-caption {
+      position: absolute;
+      bottom: 8px;
+      color: var(--muted);
+      font-size: 9px;
+      letter-spacing: .26em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .orb-caption strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .35em;
+    }
+
+    .status-line {
+      justify-content: center;
+      margin: 2px 0 20px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .17em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .status-line strong { color: var(--cyan); font-weight: 500; }
+    .status-line.listening strong { color: #a7ffdd; }
+
+    .command-area {
+      position: fixed;
+      z-index: 3;
+      right: 24px;
+      bottom: 24px;
+      left: 50%;
+      width: min(620px, calc(100vw - 440px));
+      min-width: 330px;
+      margin: 0;
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .command-form {
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      background: rgba(5, 17, 26, .82);
+      box-shadow: var(--glow);
+    }
+
+    .command-form input {
+      width: 100%;
+      min-width: 0;
+      padding: 12px 13px;
+      border: 0;
+      outline: 0;
+      color: var(--white);
+      background: transparent;
+      font-size: 12px;
+      letter-spacing: .04em;
+    }
+
+    .command-form input::placeholder { color: #65808c; }
+
+    .command-form button, .mic-button {
+      border: 1px solid rgba(99, 231, 255, .58);
+      color: #dffbff;
+      background: rgba(28, 122, 147, .27);
+      cursor: pointer;
+      transition: background .2s, box-shadow .2s, transform .2s;
+    }
+
+    .command-form button {
+      padding: 0 18px;
+      font-size: 10px;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+    }
+
+    .command-form .mic-button {
+      min-width: 104px;
+      min-height: 42px;
+      margin: 0;
+      padding: 0 10px;
+      font-size: 8px;
+      letter-spacing: .08em;
+    }
+
+    .command-form button:hover, .mic-button:hover {
+      background: rgba(35, 159, 187, .45);
+      box-shadow: 0 0 18px rgba(99, 231, 255, .24);
+    }
+
+    .mic-button {
+      display: flex;
+      min-width: 202px;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 12px auto 0;
+      padding: 0 22px;
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    .command-area .message { display: none; }
+
+    .mic-button.listening {
+      border-color: #91ffd0;
+      background: rgba(35, 157, 119, .25);
+      box-shadow: 0 0 20px rgba(80, 255, 190, .2);
+    }
+
+    .mic-icon {
+      position: relative;
+      width: 12px;
+      height: 17px;
+      border: 1px solid currentColor;
+      border-radius: 7px;
+    }
+
+    .mic-icon::after {
+      position: absolute;
+      right: -4px;
+      bottom: -5px;
+      left: -4px;
+      height: 8px;
+      content: "";
+      border: 1px solid currentColor;
+      border-top: 0;
+      border-radius: 0 0 10px 10px;
+    }
+
+    .message {
+      min-height: 17px;
+      margin: 13px 0 0;
+      color: #98bac7;
+      font-size: 11px;
+      line-height: 1.6;
+      text-align: center;
+    }
+
+    .message a {
+      color: var(--cyan);
+      text-underline-offset: 3px;
+    }
+
+    .site-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .site-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: #bdd3dc;
+      font-size: 10px;
+    }
+
+    .site-row span:last-child { color: var(--muted); }
+
+    .footer {
+      padding-top: 16px;
+      border-top: 1px solid rgba(99, 231, 255, .14);
+      color: #66828f;
+      font-size: 9px;
+      letter-spacing: .12em;
+    }
+
+    .footer span:last-child { text-align: right; }
+
+    @keyframes float { 0%, 100% { transform: translateY(0) rotateX(-4deg); } 50% { transform: translateY(-9px) rotateX(4deg); } }
+    @keyframes pulse { 0%, 100% { filter: brightness(.95); } 50% { filter: brightness(1.18); } }
+    @keyframes spin { to { transform: rotateY(72deg) rotateX(12deg) rotateZ(360deg); } }
+    @keyframes equalize { to { transform: scaleY(.35); opacity: .6; } }
+    @keyframes hud-pulse { 50% { opacity: .45; transform: scale(.78); } }
+
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr 1fr; gap: 18px; }
+      .orb-stage { grid-column: 1 / -1; grid-row: 1; min-height: 390px; }
+      .side-column { grid-row: 2; }
+      .side-column:last-child { grid-column: 2; }
+      .side-column:first-child { grid-column: 1; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { padding-top: 19px; }
+      .top-meta { gap: 0; }
+      .top-meta > span:last-child { display: none; }
+      main { display: flex; flex-direction: column; gap: 18px; padding: 12px 0 20px; }
+      .orb-stage { width: 100%; min-height: 350px; }
+      .orb { width: 245px; }
+      .side-column { width: 100%; grid-template-columns: 1fr 1fr; }
+      .side-column:last-child { display: none; }
+      .panel { padding: 14px; }
+      .metric { font-size: 20px; }
+      .footer { align-items: flex-start; font-size: 8px; }
+    }
+
+    @media (max-width: 760px) {
+      .hud-status { top: 12px; left: 12px; min-width: 0; padding: 11px 12px; }
+      .hud-telemetry { top: 12px; right: 12px; width: min(210px, 48vw); padding: 11px 12px; }
+      .hud-console {
+        bottom: 94px;
+        width: calc(100vw - 24px);
+        min-width: 0;
+      }
+      .command-area {
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        width: auto;
+        min-width: 0;
+        transform: none;
+      }
+      .hud-actions {
+        right: 12px;
+        bottom: auto;
+        top: 112px;
+        width: 160px;
+        gap: 6px;
+        padding: 10px;
+      }
+      .hud-action { min-height: 30px; font-size: 8px; }
+      .transcript-feed { max-height: 78px; min-height: 42px; }
+    }
+
+    @media (max-width: 420px) {
+      .hud-status { max-width: 44vw; }
+      .hud-core-status { font-size: 9px; }
+      .hud-telemetry { width: 45vw; }
+      .hud-actions { top: 120px; width: 145px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    }
+
+    .monitor-frame {
+      position: fixed;
+      z-index: 1;
+      inset: 14px;
+      display: grid;
+      grid-template-rows: 52px minmax(0, 1fr) 164px;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .monitor-header, .monitor-card, .monitor-bottom, .command-area {
+      border: 1px solid rgba(86, 215, 246, .38);
+      background: linear-gradient(135deg, rgba(4, 18, 29, .88), rgba(5, 22, 34, .66));
+      box-shadow: inset 0 0 20px rgba(32, 180, 211, .035), 0 0 18px rgba(24, 157, 190, .08);
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+      clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 13px 100%, 0 calc(100% - 13px));
+    }
+
+    .monitor-header {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 0 18px;
+      pointer-events: auto;
+    }
+
+    .monitor-title {
+      overflow: hidden;
+      color: #c9f8ff;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .2em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .monitor-title span { color: var(--cyan); }
+    .monitor-online {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 9px;
+      color: #8df8dc;
+      font-size: 9px;
+      letter-spacing: .16em;
+    }
+    .monitor-clock {
+      min-width: 72px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .monitor-grid {
+      display: grid;
+      min-height: 0;
+      grid-template-columns: minmax(220px, 1fr) minmax(220px, 1.35fr) minmax(240px, 1fr);
+      gap: 10px;
+      pointer-events: none;
+    }
+    .monitor-column {
+      display: grid;
+      min-height: 0;
+      align-content: start;
+      gap: 10px;
+      overflow-y: auto;
+      scrollbar-color: rgba(99, 231, 255, .25) transparent;
+      scrollbar-width: thin;
+      pointer-events: none;
+    }
+    .monitor-card {
+      position: relative;
+      min-width: 0;
+      padding: 13px 14px;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+    .monitor-card::before, .monitor-bottom::before, .command-area::before {
+      position: absolute;
+      top: 0;
+      left: 14px;
+      width: 36px;
+      height: 1px;
+      content: "";
+      background: var(--cyan);
+      box-shadow: 0 0 8px var(--cyan);
+    }
+    .monitor-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 12px;
+      color: #8eabb8;
+      font-size: 9px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    .monitor-heading small {
+      color: #537785;
+      font-size: 8px;
+      letter-spacing: .08em;
+    }
+    .gauge + .gauge { margin-top: 11px; }
+    .gauge-heading { margin-bottom: 6px; }
+    .gauge-label { font-size: 8px; }
+    .gauge-value { font-size: 11px; }
+    .gauge-track { height: 5px; }
+    .gauge-fill.gauge-unavailable {
+      width: 12%;
+      background: repeating-linear-gradient(90deg, #38515d 0 4px, transparent 4px 7px);
+      box-shadow: none;
+    }
+    .diag-footnote, .widget-note {
+      margin: 10px 0 0;
+      color: #688591;
+      font-size: 8px;
+      line-height: 1.5;
+    }
+    .weather-widget {
+      display: grid;
+      grid-template-columns: 78px 1fr;
+      align-items: center;
+      gap: 13px;
+    }
+    .radar {
+      position: relative;
+      width: 74px;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border: 1px solid rgba(73, 217, 245, .55);
+      border-radius: 50%;
+      background:
+        linear-gradient(rgba(81, 215, 245, .14) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(81, 215, 245, .14) 1px, transparent 1px),
+        radial-gradient(circle, rgba(22, 135, 159, .12), rgba(2, 13, 23, .75));
+      background-size: 18px 18px, 18px 18px, auto;
+      box-shadow: 0 0 15px rgba(49, 204, 231, .13), inset 0 0 12px rgba(46, 205, 235, .13);
+    }
+    .radar::before {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      content: "";
+      background: conic-gradient(from 0deg, transparent 0 78%, rgba(71, 244, 255, .42));
+      animation: radar-sweep 4s linear infinite;
+    }
+    .radar::after {
+      position: absolute;
+      top: 48%;
+      left: 63%;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      content: "";
+      background: #a8ffff;
+      box-shadow: 0 0 8px 3px var(--cyan);
+    }
+    .weather-temp { color: #d6fbff; font-size: 22px; font-weight: 300; }
+    .weather-temp small { color: var(--muted); font-size: 9px; }
+    .weather-label { margin-top: 5px; color: var(--cyan); font-size: 8px; letter-spacing: .12em; }
+    .weather-time { margin-top: 9px; color: #98b4bf; font-size: 9px; }
+
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .app-button {
+      display: grid;
+      min-height: 42px;
+      place-items: center;
+      border: 1px solid rgba(76, 190, 219, .24);
+      color: #aad9e3;
+      background: rgba(15, 55, 70, .36);
+      font-size: 8px;
+      letter-spacing: .08em;
+      text-align: center;
+      text-decoration: none;
+      transition: color .2s, border-color .2s, background .2s;
+    }
+    .app-button:hover, .app-button:focus-visible {
+      border-color: rgba(99, 231, 255, .72);
+      color: #e4fcff;
+      background: rgba(19, 114, 138, .48);
+      outline: none;
+    }
+    .globe-viewport {
+      position: relative;
+      min-width: 0;
+      pointer-events: none;
+    }
+    .mode-selector {
+      display: flex;
+      flex: 1 1 auto;
+      justify-content: center;
+      gap: 6px;
+      pointer-events: auto;
+    }
+    .mode-button {
+      min-width: 68px;
+      padding: 7px 8px;
+      border: 1px solid rgba(83, 212, 240, .4);
+      color: #91b9c5;
+      background: rgba(3, 15, 25, .76);
+      font-size: 8px;
+      letter-spacing: .13em;
+      cursor: pointer;
+      transition: color .2s, border-color .2s, background .2s, box-shadow .2s;
+    }
+    .mode-button:hover, .mode-button.active {
+      border-color: rgba(99, 231, 255, .85);
+      color: #dffbff;
+      background: rgba(16, 88, 107, .72);
+      box-shadow: 0 0 14px rgba(99, 231, 255, .2);
+    }
+    .mode-button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+    .memory-card { display: flex; min-height: 0; flex-direction: column; }
+    .memory-card .transcript-feed { min-height: 110px; max-height: 220px; margin-top: 0; }
+    .memory-state {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid rgba(99, 231, 255, .12);
+      color: #62818e;
+      font-size: 8px;
+      letter-spacing: .08em;
+    }
+    .memory-state strong { color: #83ffd1; font-weight: 500; }
+    .speech-state { color: var(--cyan); font-size: 10px; letter-spacing: .12em; }
+    .speech-state[data-phase="THINKING"] { color: #ffd982; }
+    .speech-state[data-phase="SPEAKING"] { color: #a7ffdd; }
+    .monitor-wave[data-phase="THINKING"] i { animation-duration: .45s; }
+    .monitor-wave[data-phase="SPEAKING"] i { animation-duration: .3s; }
+    .monitor-wave {
+      display: flex;
+      height: 34px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 3px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .monitor-wave i {
+      width: 3px;
+      height: var(--h);
+      flex: 1 0 2px;
+      max-width: 5px;
+      background: linear-gradient(to top, rgba(46, 171, 201, .2), #63e7ff);
+      box-shadow: 0 0 5px rgba(99, 231, 255, .55);
+      animation: equalize .8s ease-in-out infinite alternate;
+      animation-delay: var(--d);
+    }
+    .action-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .action-stack .hud-action { min-height: 32px; padding: 0 8px; font-size: 8px; }
+    .action-stack .hud-action:first-child { grid-column: 1 / -1; }
+
+    .monitor-bottom {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      grid-template-columns: minmax(220px, .85fr) minmax(340px, 1.5fr);
+      gap: 12px;
+      padding: 12px 14px;
+      pointer-events: auto;
+    }
+    .activity-panel { min-width: 0; }
+    .activity-chart { display: block; width: 100%; height: 92px; }
+    .command-area {
+      position: relative;
+      right: auto;
+      bottom: auto;
+      left: auto;
+      display: flex;
+      width: auto;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: center;
+      margin: 0;
+      padding: 12px;
+      transform: none;
+      pointer-events: auto;
+    }
+    .command-form {
+      border-color: rgba(80, 225, 255, .58);
+      background: rgba(2, 13, 22, .76);
+      box-shadow: 0 0 20px rgba(44, 203, 237, .12), inset 0 0 12px rgba(44, 203, 237, .04);
+    }
+    .command-form input { font-size: 11px; }
+    .command-form .mic-button { min-width: 82px; }
+    .command-hint {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      color: #64838f;
+      font-size: 8px;
+    }
+    .monitor-message { min-height: 12px; margin: 6px 0 0; color: #7396a3; font-size: 8px; }
+    #statusLine, .shell { display: none; }
+    @keyframes radar-sweep { to { transform: rotate(360deg); } }
+
+    @media (max-width: 900px) {
+      .monitor-frame { grid-template-rows: 48px minmax(0, 1fr) 154px; }
+      .monitor-grid { grid-template-columns: minmax(180px, .9fr) minmax(200px, 1fr) minmax(190px, .9fr); gap: 7px; }
+      .monitor-card { padding: 10px; }
+      .monitor-bottom { grid-template-columns: minmax(180px, .8fr) minmax(300px, 1.3fr); gap: 8px; padding: 10px; }
+    }
+    @media (max-width: 680px) {
+      body { overflow-y: auto; }
+      .monitor-frame {
+        position: relative;
+        inset: auto;
+        min-height: 100vh;
+        grid-template-rows: 48px auto auto;
+        margin: 8px;
+      }
+      .monitor-header { padding: 0 10px; }
+      .monitor-title { font-size: 9px; letter-spacing: .1em; }
+      .mode-selector { gap: 3px; }
+      .mode-button { min-width: 0; padding: 6px 5px; font-size: 7px; }
+      .monitor-online { font-size: 0; }
+      .monitor-online .hud-pulse { margin: 0; }
+      .monitor-clock { font-size: 10px; }
+      .monitor-grid { grid-template-columns: 1fr 1fr; }
+      .left-column { grid-column: 1; grid-row: 1; }
+      .globe-viewport { display: none; }
+      .right-column { grid-column: 2; grid-row: 1; }
+      .monitor-column { gap: 7px; }
+      .monitor-card { padding: 9px; }
+      .monitor-heading { margin-bottom: 8px; font-size: 8px; }
+      .weather-widget { grid-template-columns: 54px 1fr; gap: 8px; }
+      .radar { width: 52px; }
+      .weather-temp { font-size: 18px; }
+      .app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .app-button { min-height: 32px; font-size: 7px; }
+      .memory-card .transcript-feed { min-height: 120px; max-height: 190px; font-size: 9px; }
+      .monitor-bottom { grid-template-columns: 1fr; }
+      .activity-chart { height: 68px; }
+      .command-area { min-height: 84px; }
+      .command-form { gap: 4px; }
+      .command-form button { padding: 0 9px; }
+      .command-form .mic-button { min-width: 58px; }
+    }
+    @media (max-width: 390px) {
+      .monitor-frame { margin: 5px; }
+      .monitor-grid { grid-template-columns: 1fr; }
+      .left-column, .right-column { grid-column: 1; }
+      .right-column { grid-row: 2; }
+      .monitor-header { gap: 5px; padding: 0 6px; }
+      .monitor-title { max-width: 29vw; font-size: 7px; letter-spacing: .06em; }
+      .monitor-online { display: none; }
+      .monitor-clock { min-width: 55px; font-size: 9px; }
+      .mode-button { padding: 6px 4px; }
+      .memory-card .transcript-feed { min-height: 90px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="reactor-canvas" aria-hidden="true"></canvas>
+  <div class="monitor-frame">
+    <header class="monitor-header">
+      <div class="monitor-title"><span>J.A.R.V.I.S.</span> DATA MONITORING SCREEN</div>
+      <nav class="mode-selector" aria-label="Visualization mode">
+        <button class="mode-button active" type="button" data-mode="REACTOR" aria-pressed="true">REACTOR</button>
+        <button class="mode-button" type="button" data-mode="GLOBE" aria-pressed="false">GLOBE</button>
+        <button class="mode-button" type="button" data-mode="METRICS" aria-pressed="false">METRICS</button>
+      </nav>
+      <div class="monitor-online"><i class="hud-pulse" aria-hidden="true"></i>INTERFACE <strong id="coreConnection">ONLINE</strong></div>
+      <time class="monitor-clock" id="clock">--:--:--</time>
+    </header>
+    <main class="monitor-grid">
+      <aside class="monitor-column left-column" aria-label="System diagnostics and applications">
+        <section class="monitor-card">
+          <h2 class="monitor-heading">SYSTEM DIAGNOSTICS <small>LIVE</small></h2>
+          <div class="gauge">
+            <div class="gauge-heading"><span class="gauge-label">CPU</span><span class="gauge-value" id="cpuValue">--%</span></div>
+            <div class="gauge-track" role="meter" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="cpuMeter"><div class="gauge-fill" id="cpuGauge"></div></div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-heading"><span class="gauge-label">RAM</span><span class="gauge-value" id="ramValue">--%</span></div>
+            <div class="gauge-track" role="meter" aria-label="RAM usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="ramMeter"><div class="gauge-fill" id="ramGauge"></div></div>
+          </div>
+          <div class="gauge">
+            <div class="gauge-heading"><span class="gauge-label">GPU</span><span class="gauge-value">N/A</span></div>
+            <div class="gauge-track" role="meter" aria-label="GPU usage unavailable" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="gauge-fill gauge-unavailable"></div></div>
+          </div>
+          <p class="diag-footnote">GPU telemetry unavailable from current system provider.</p>
+        </section>
+        <section class="monitor-card">
+          <h2 class="monitor-heading">LOCAL CONDITIONS <small>RADAR</small></h2>
+          <div class="weather-widget">
+            <div class="radar" aria-hidden="true"></div>
+            <div><div class="weather-temp">--<small>°</small></div><div class="weather-label">WEATHER FEED OFFLINE</div><div class="weather-time">LOCAL <span id="weatherClock">--:--:--</span></div></div>
+          </div>
+        </section>
+        <section class="monitor-card">
+          <h2 class="monitor-heading">QUICK LINKS / APPS</h2>
+          <nav class="app-grid" aria-label="Quick links">
+            <a class="app-button" href="https://www.youtube.com" target="_blank" rel="noopener noreferrer">YOUTUBE</a>
+            <a class="app-button" href="https://www.google.com" target="_blank" rel="noopener noreferrer">GOOGLE</a>
+            <a class="app-button" href="https://mail.google.com" target="_blank" rel="noopener noreferrer">GMAIL</a>
+            <a class="app-button" href="https://github.com" target="_blank" rel="noopener noreferrer">GITHUB</a>
+            <a class="app-button" href="https://open.spotify.com" target="_blank" rel="noopener noreferrer">SPOTIFY</a>
+            <a class="app-button" href="https://www.wikipedia.org" target="_blank" rel="noopener noreferrer">WIKI</a>
+          </nav>
+        </section>
+      </aside>
+      <section class="globe-viewport" aria-label="Interactive 3D visualization"></section>
+      <aside class="monitor-column right-column" aria-label="AI memory and voice controls">
+        <section class="monitor-card memory-card">
+          <h2 class="monitor-heading">AI MEMORY &amp; CONTEXT LOG <small>SESSION</small></h2>
+          <div class="transcript-feed" id="transcriptFeed" role="log" aria-live="polite" aria-relevant="additions">
+            <div class="transcript-line"><time>--:--:--</time><strong>CORE</strong> Awaiting command input.</div>
+          </div>
+          <div class="memory-state"><span>CORE LINK</span><strong>ACTIVE</strong><span>CONTEXT LOCAL</span></div>
+        </section>
+        <section class="monitor-card">
+          <h2 class="monitor-heading">SPEECH RECOGNITION <small>AUDIO I/O</small></h2>
+          <div class="speech-state" id="voiceState">STANDBY</div>
+          <div class="monitor-wave" aria-hidden="true">
+            <i style="--h:9px;--d:-.2s"></i><i style="--h:19px;--d:-.5s"></i><i style="--h:13px;--d:-.1s"></i><i style="--h:28px;--d:-.7s"></i><i style="--h:17px;--d:-.3s"></i><i style="--h:30px;--d:-.6s"></i><i style="--h:14px;--d:-.4s"></i><i style="--h:22px;--d:-.8s"></i><i style="--h:10px;--d:-.2s"></i><i style="--h:26px;--d:-.9s"></i><i style="--h:16px;--d:-.3s"></i><i style="--h:23px;--d:-.6s"></i><i style="--h:12px;--d:-.4s"></i><i style="--h:20px;--d:-.7s"></i><i style="--h:9px;--d:-.1s"></i><i style="--h:27px;--d:-.5s"></i><i style="--h:14px;--d:-.8s"></i><i style="--h:21px;--d:-.3s"></i>
+          </div>
+        </section>
+        <section class="monitor-card">
+          <h2 class="monitor-heading">ACTION TRIGGERS</h2>
+          <div class="action-stack">
+            <button class="hud-action" id="scanAction" type="button">SYSTEM SCAN</button>
+            <button class="hud-action" id="rebootAction" type="button">AI REBOOT</button>
+            <button class="hud-action" id="muteAction" type="button" aria-pressed="false">MUTE</button>
+            <button class="hud-action" id="clearAction" type="button">CLEAR LOG</button>
+          </div>
+        </section>
+      </aside>
+    </main>
+    <section class="monitor-bottom" aria-label="Activity history and voice command">
+      <div class="activity-panel">
+        <h2 class="monitor-heading">COMMAND HISTORY / ACTIVITY <small>REAL TIME</small></h2>
+        <canvas class="activity-chart" id="activityChart" aria-label="Recent system activity chart"></canvas>
+      </div>
+      <section class="command-area" aria-label="Assistant command input">
+        <div class="monitor-heading">J.A.R.V.I.S. COMMAND LINK <small id="coreListening">STANDBY</small></div>
+        <form class="command-form" id="commandForm">
+          <input id="commandInput" type="text" autocomplete="off" placeholder="Enter command or ask J.A.R.V.I.S..." aria-label="Type an assistant command">
+          <button type="submit">SEND</button>
+          <button class="mic-button" id="micButton" type="button" aria-label="Activate continuous voice recognition">
+            <span class="mic-icon" aria-hidden="true"></span><span id="micLabel">VOICE</span>
+          </button>
+        </form>
+        <div class="command-hint"><span>VOICE INPUT REQUIRES USER ACTIVATION</span><span id="statusText">READY</span></div>
+        <p class="monitor-message" id="message" aria-live="polite">Voice recognition available in supported browsers.</p>
+      </section>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    (() => {
+      window.jarvisAudio = {
+        analyser: null, samples: null, active: false, speaking: false,
+        speechLevel: 0, level: 0
+      };
+      if (!window.THREE || !THREE.EffectComposer || !THREE.RenderPass
+        || !THREE.UnrealBloomPass || !THREE.OrbitControls) return;
+
+      const canvas = document.getElementById("reactor-canvas");
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.z = 8;
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+        powerPreference: "high-performance"
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setClearColor(0x000000, 0);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.enablePan = false;
+      controls.enableZoom = true;
+      controls.minDistance = 4;
+      controls.maxDistance = 12;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.45;
+      controls.addEventListener("start", () => {
+        controls.autoRotate = false;
+      });
+      controls.addEventListener("end", () => {
+        controls.autoRotate = true;
+      });
+
+      const reactorMode = new THREE.Group();
+      const reactor = new THREE.Group();
+      reactorMode.add(reactor);
+      scene.add(reactorMode);
+
+      scene.add(new THREE.AmbientLight(0x8ac9df, 0.55));
+      const reactorLight = new THREE.PointLight(0x25dfff, 2.8, 8);
+      reactorLight.position.set(0, 0, 1.8);
+      scene.add(reactorLight);
+
+      const reactorCore = new THREE.Mesh(
+        new THREE.SphereGeometry(0.52, 48, 32),
+        new THREE.MeshStandardMaterial({
+          color: 0x071b27,
+          metalness: 0.82,
+          roughness: 0.28,
+          emissive: 0x062b3a,
+          emissiveIntensity: 0.7
+        })
+      );
+      reactor.add(reactorCore);
+
+      const coreWireframe = new THREE.Mesh(
+        new THREE.SphereGeometry(0.61, 24, 16),
+        new THREE.MeshBasicMaterial({
+          color: 0x32e5ff,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.68
+        })
+      );
+      reactor.add(coreWireframe);
+      [0.69, 0.77].forEach((radius, index) => {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(radius, 0.012, 6, 128),
+          new THREE.MeshBasicMaterial({
+            color: index ? 0x1684aa : 0x58f1ff,
+            transparent: true,
+            opacity: index ? 0.58 : 0.9
+          })
+        );
+        ring.rotation.set(index ? 0.7 : 0.2, index ? 0.25 : 0.6, index ? 0.4 : 0);
+        reactor.add(ring);
+      });
+
+      const reactorRings = [];
+      [
+        { radius: 0.98, tube: 0.052, tilt: [0.28, 0.25, 0.08], color: 0xb4d9e2 },
+        { radius: 1.23, tube: 0.044, tilt: [1.08, 0.38, 0.32], color: 0x7dabb9 },
+        { radius: 1.48, tube: 0.038, tilt: [0.42, 1.12, 0.72], color: 0xc3e3e8 }
+      ].forEach(({ radius, tube, tilt, color }, index) => {
+        const ringAssembly = new THREE.Group();
+        ringAssembly.rotation.set(...tilt);
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(radius, tube, 12, 160),
+          new THREE.MeshStandardMaterial({
+            color,
+            metalness: 0.88,
+            roughness: 0.24,
+            emissive: index === 1 ? 0x052b38 : 0x03151d,
+            emissiveIntensity: 0.55
+          })
+        );
+        ringAssembly.add(ring);
+
+        const tickPositions = [];
+        for (let tick = 0; tick < 64; tick += 1) {
+          const angle = (tick / 64) * Math.PI * 2;
+          const tickRadius = radius + tube + (tick % 4 === 0 ? 0.055 : 0.025);
+          const innerRadius = radius + tube - 0.012;
+          tickPositions.push(
+            Math.cos(angle) * innerRadius, Math.sin(angle) * innerRadius, 0,
+            Math.cos(angle) * tickRadius, Math.sin(angle) * tickRadius, 0
+          );
+        }
+        const ticks = new THREE.BufferGeometry();
+        ticks.setAttribute("position", new THREE.Float32BufferAttribute(tickPositions, 3));
+        ringAssembly.add(new THREE.LineSegments(
+          ticks,
+          new THREE.LineBasicMaterial({
+            color: index === 1 ? 0x62edff : 0xb4e5ed,
+            transparent: true,
+            opacity: 0.76
+          })
+        ));
+        reactor.add(ringAssembly);
+        reactorRings.push(ringAssembly);
+      });
+
+      const containmentRing = new THREE.Mesh(
+        new THREE.TorusGeometry(1.78, 0.025, 8, 192),
+        new THREE.MeshStandardMaterial({
+          color: 0x4f9eaf,
+          metalness: 0.84,
+          roughness: 0.3,
+          emissive: 0x063242,
+          emissiveIntensity: 0.8
+        })
+      );
+      containmentRing.rotation.set(0.18, 0.32, 0.12);
+      reactor.add(containmentRing);
+
+      const containmentDotPositions = [];
+      for (let dot = 0; dot < 180; dot += 1) {
+        const angle = (dot / 180) * Math.PI * 2;
+        const radius = dot % 6 === 0 ? 1.91 : 1.84;
+        containmentDotPositions.push(
+          Math.cos(angle) * radius,
+          Math.sin(angle) * radius,
+          (dot % 2 ? 0.035 : -0.035)
+        );
+      }
+      const containmentDotsGeometry = new THREE.BufferGeometry();
+      containmentDotsGeometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(containmentDotPositions, 3)
+      );
+      const containmentDots = new THREE.Points(
+        containmentDotsGeometry,
+        new THREE.PointsMaterial({
+          color: 0x58eaff,
+          size: 0.035,
+          transparent: true,
+          opacity: 0.86,
+          depthWrite: false
+        })
+      );
+      reactor.add(containmentDots);
+
+      const globeMode = new THREE.Group();
+      const globe = new THREE.Group();
+      globeMode.add(globe);
+      scene.add(globeMode);
+      const globeRadius = 1.22;
+
+      const mapCanvas = document.createElement("canvas");
+      mapCanvas.width = 1024;
+      mapCanvas.height = 512;
+      const mapContext = mapCanvas.getContext("2d");
+      mapContext.fillStyle = "#061827";
+      mapContext.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+      const landShapes = [
+        [[-168, 68], [-145, 72], [-126, 60], [-112, 55], [-100, 50], [-83, 50], [-60, 48], [-53, 37], [-79, 8], [-96, 17], [-108, 24], [-118, 33], [-130, 43], [-153, 58]],
+        [[-81, 12], [-67, 8], [-50, -4], [-35, -10], [-42, -24], [-51, -34], [-70, -56], [-77, -39], [-80, -18]],
+        [[-11, 36], [-9, 58], [8, 71], [31, 69], [42, 57], [34, 45], [20, 36], [8, 37]],
+        [[-18, 35], [8, 38], [32, 30], [42, 12], [50, -12], [39, -34], [19, -35], [5, -27], [-5, -5], [-15, 15]],
+        [[32, 70], [58, 76], [93, 72], [122, 60], [151, 59], [178, 49], [158, 35], [143, 18], [122, 8], [106, 21], [89, 8], [74, 8], [58, 23], [45, 38], [32, 51]],
+        [[112, -11], [132, -10], [153, -18], [153, -36], [136, -44], [116, -34]],
+        [[-52, 82], [-24, 78], [-19, 62], [-39, 58], [-55, 68]]
+      ];
+      const projectMapPoint = ([longitude, latitude]) => [
+        (longitude + 180) / 360 * mapCanvas.width,
+        (90 - latitude) / 180 * mapCanvas.height
+      ];
+
+      mapContext.fillStyle = "#44dff5";
+      mapContext.strokeStyle = "rgba(178, 251, 255, .72)";
+      mapContext.lineWidth = 2;
+      landShapes.forEach((shape) => {
+        const points = shape.map(projectMapPoint);
+        mapContext.beginPath();
+        mapContext.moveTo(points[0][0], points[0][1]);
+        points.slice(1).forEach(([x, y]) => mapContext.lineTo(x, y));
+        mapContext.closePath();
+        mapContext.fill();
+        mapContext.stroke();
+      });
+
+      const landPixels = mapContext.getImageData(0, 0, mapCanvas.width, mapCanvas.height).data;
+      const landPositions = [];
+      for (let y = 3; y < mapCanvas.height; y += 6) {
+        for (let x = 3; x < mapCanvas.width; x += 6) {
+          const pixel = (y * mapCanvas.width + x) * 4;
+          if (landPixels[pixel] < 40 || landPixels[pixel + 1] < 170) continue;
+
+          const longitude = (x / mapCanvas.width) * Math.PI * 2;
+          const latitude = (0.5 - y / mapCanvas.height) * Math.PI;
+          const latitudeRadius = globeRadius * Math.cos(latitude);
+          landPositions.push(
+            -latitudeRadius * Math.cos(longitude),
+            globeRadius * Math.sin(latitude),
+            latitudeRadius * Math.sin(longitude)
+          );
+        }
+      }
+
+      const mapTexture = new THREE.CanvasTexture(mapCanvas);
+      mapTexture.encoding = THREE.sRGBEncoding;
+      const globeSurface = new THREE.Mesh(
+        new THREE.SphereGeometry(globeRadius, 96, 64),
+        new THREE.MeshBasicMaterial({
+          map: mapTexture,
+          color: 0xa8f8ff,
+          transparent: true,
+          opacity: 0.94
+        })
+      );
+      globe.add(globeSurface);
+
+      const globeWireframe = new THREE.Mesh(
+        new THREE.SphereGeometry(globeRadius * 1.008, 32, 24),
+        new THREE.MeshBasicMaterial({
+          color: 0x4bdcf5,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.28,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      globe.add(globeWireframe);
+
+      const landGeometry = new THREE.BufferGeometry();
+      landGeometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(landPositions, 3)
+      );
+      const landDots = new THREE.Points(
+        landGeometry,
+        new THREE.PointsMaterial({
+          color: 0xb3fbff,
+          size: 0.018,
+          transparent: true,
+          opacity: 0.94,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      );
+      globe.add(landDots);
+
+      const atmosphere = new THREE.Mesh(
+        new THREE.SphereGeometry(globeRadius * 1.1, 48, 32),
+        new THREE.MeshBasicMaterial({
+          color: 0x16bfff,
+          transparent: true,
+          opacity: 0.11,
+          blending: THREE.AdditiveBlending,
+          side: THREE.BackSide,
+          depthWrite: false
+        })
+      );
+      globe.add(atmosphere);
+
+      const globeRings = [];
+      [
+        { radius: 0.82, tube: 0.008, color: 0x83f7ff, tilt: [Math.PI / 2, 0, 0], y: 0.88 },
+        { radius: 1.08, tube: 0.008, color: 0x27cfff, tilt: [Math.PI / 2, 0, 0], y: 0.56 },
+        { radius: 1.3, tube: 0.009, color: 0x8ef6ff, tilt: [0, Math.PI / 2, 0], y: 0 },
+        { radius: 1.3, tube: 0.009, color: 0x20cfff, tilt: [0.32, 0.2, Math.PI / 2], y: 0 },
+        { radius: 1.68, tube: 0.018, color: 0x5aeaff, tilt: [1.2, 0.4, 0.5], y: 0 },
+        { radius: 2.05, tube: 0.014, color: 0x20aeca, tilt: [0.4, 1.1, 0.8], y: 0 }
+      ].forEach(({ radius, tube, color, tilt, y = 0 }) => {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(radius, tube, 8, 160),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.82,
+            blending: THREE.AdditiveBlending
+          })
+        );
+        ring.rotation.set(...tilt);
+        ring.position.y = y;
+        globeRings.push(ring);
+        globe.add(ring);
+      });
+
+      const pulseMarkers = [];
+      [
+        { longitude: -74, latitude: 40 },
+        { longitude: 2, latitude: 48 },
+        { longitude: 139, latitude: 36 },
+        { longitude: 78, latitude: 22 }
+      ].forEach(({ longitude, latitude }) => {
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 12, 12),
+          new THREE.MeshBasicMaterial({
+            color: 0xb7ffff,
+            transparent: true,
+            opacity: 0.95,
+            blending: THREE.AdditiveBlending
+          })
+        );
+        const longitudeRadians = longitude * Math.PI / 180;
+        const latitudeRadians = latitude * Math.PI / 180;
+        const latitudeRadius = globeRadius * Math.cos(latitudeRadians);
+        marker.position.set(
+          -latitudeRadius * Math.cos(longitudeRadians),
+          globeRadius * Math.sin(latitudeRadians),
+          latitudeRadius * Math.sin(longitudeRadians)
+        );
+        pulseMarkers.push(marker);
+        globe.add(marker);
+      });
+
+      const particleCount = 1800;
+      const particlePositions = new Float32Array(particleCount * 3);
+      for (let i = 0; i < particleCount; i += 1) {
+        const theta = Math.random() * Math.PI * 2;
+        const cosine = Math.random() * 2 - 1;
+        const radius = 1.95 + Math.random() * 1.15;
+        const ringRadius = Math.sqrt(1 - cosine * cosine);
+        particlePositions[i * 3] = radius * ringRadius * Math.cos(theta);
+        particlePositions[i * 3 + 1] = radius * cosine;
+        particlePositions[i * 3 + 2] = radius * ringRadius * Math.sin(theta);
+      }
+      const particleGeometry = new THREE.BufferGeometry();
+      particleGeometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+      const particles = new THREE.Points(
+        particleGeometry,
+        new THREE.PointsMaterial({
+          color: 0x54eaff,
+          size: 0.025,
+          transparent: true,
+          opacity: 0.8,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      );
+      globe.add(particles);
+
+      const metricsMode = new THREE.Group();
+      const metricsVisual = new THREE.Group();
+      metricsMode.add(metricsVisual);
+      const metricsNodes = [];
+      const metricsNodePositions = [
+        [-1.05, 0.72, 0], [0, 0.72, 0], [1.05, 0.72, 0],
+        [-1.05, -0.72, 0], [0, -0.72, 0], [1.05, -0.72, 0]
+      ];
+      metricsNodePositions.forEach((position, index) => {
+        const node = new THREE.Group();
+        node.position.set(...position);
+        node.userData.phase = index * 0.9;
+        const edgeMaterial = new THREE.LineBasicMaterial({
+          color: index < 3 ? 0x5beaff : 0x6bbcff,
+          transparent: true,
+          opacity: 0.84,
+          blending: THREE.AdditiveBlending
+        });
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(0.62, 0.62, 0.62)),
+          edgeMaterial
+        );
+        node.add(edges);
+        const core = new THREE.Mesh(
+          new THREE.BoxGeometry(0.2, 0.2, 0.2),
+          new THREE.MeshBasicMaterial({
+            color: index < 3 ? 0x9ffaff : 0x6dbeff,
+            transparent: true,
+            opacity: 0.62,
+            blending: THREE.AdditiveBlending
+          })
+        );
+        node.add(core);
+        metricsNodes.push(node);
+        metricsVisual.add(node);
+      });
+      scene.add(metricsMode);
+
+      const MODES = {
+        REACTOR: reactorMode,
+        GLOBE: globeMode,
+        METRICS: metricsMode
+      };
+      const modeContent = {
+        REACTOR: reactor,
+        GLOBE: globe,
+        METRICS: metricsVisual
+      };
+      Object.entries(MODES).forEach(([mode, object]) => {
+        object.userData.mode = mode;
+        object.userData.opacity = mode === "REACTOR" ? 1 : 0;
+        object.scale.setScalar(mode === "REACTOR" ? 1 : 0.001);
+        object.visible = mode === "REACTOR";
+        object.traverse((child) => {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            if (!material) return;
+            material.transparent = true;
+            material.userData.baseOpacity = material.opacity;
+          });
+        });
+        if (mode !== "REACTOR") {
+          object.traverse((child) => {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach((material) => {
+              if (material) material.opacity = 0;
+            });
+          });
+        }
+      });
+
+      let activeMode = "REACTOR";
+      let modeTransition = null;
+
+      function setModeOpacity(object, opacity) {
+        object.userData.opacity = opacity;
+        object.traverse((child) => {
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+          materials.forEach((material) => {
+            if (material && typeof material.userData.baseOpacity === "number") {
+              material.opacity = material.userData.baseOpacity * opacity;
+            }
+          });
+        });
+      }
+
+      function switchMode(newMode) {
+        const nextMode = String(newMode).toUpperCase();
+        if (!MODES[nextMode] || nextMode === activeMode) return activeMode;
+
+        if (modeTransition) modeTransition.kill();
+        const outgoing = MODES[activeMode];
+        const incoming = MODES[nextMode];
+        Object.entries(MODES).forEach(([mode, object]) => {
+          if (object === outgoing || object === incoming) return;
+          object.visible = false;
+          object.scale.setScalar(0.001);
+          setModeOpacity(object, 0);
+        });
+        activeMode = nextMode;
+        document.querySelectorAll(".mode-button").forEach((button) => {
+          const selected = button.dataset.mode === nextMode;
+          button.classList.toggle("active", selected);
+          button.setAttribute("aria-pressed", String(selected));
+        });
+
+        if (!window.gsap) {
+          outgoing.visible = false;
+          outgoing.scale.setScalar(0.001);
+          setModeOpacity(outgoing, 0);
+          incoming.visible = true;
+          incoming.scale.setScalar(1);
+          setModeOpacity(incoming, 1);
+          return activeMode;
+        }
+
+        incoming.visible = true;
+        incoming.scale.setScalar(0.001);
+        setModeOpacity(incoming, 0);
+        modeTransition = window.gsap.timeline();
+        modeTransition.to(outgoing.scale, {
+          x: 0.001, y: 0.001, z: 0.001, duration: 0.6, ease: "power2.inOut"
+        }, 0);
+        modeTransition.to(outgoing.userData, {
+          opacity: 0,
+          duration: 0.6,
+          ease: "power2.inOut",
+          onUpdate: () => setModeOpacity(outgoing, outgoing.userData.opacity)
+        }, 0);
+        modeTransition.call(() => { outgoing.visible = false; }, null, 0.6);
+        modeTransition.to(incoming.scale, {
+          x: 1, y: 1, z: 1, duration: 0.6, ease: "power2.out"
+        }, 0.6);
+        modeTransition.to(incoming.userData, {
+          opacity: 1,
+          duration: 0.6,
+          ease: "power2.out",
+          onUpdate: () => setModeOpacity(incoming, incoming.userData.opacity)
+        }, 0.6);
+        return activeMode;
+      }
+
+      window.switchMode = switchMode;
+      document.querySelectorAll(".mode-button").forEach((button) => {
+        button.addEventListener("click", () => switchMode(button.dataset.mode));
+      });
+
+      const composer = new THREE.EffectComposer(renderer);
+      composer.addPass(new THREE.RenderPass(scene, camera));
+      const bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        0.5,
+        0.4,
+        0.85
+      );
+      composer.addPass(bloomPass);
+
+      function resizeRenderer() {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+        composer.setSize(width, height);
+      }
+
+      window.addEventListener("resize", resizeRenderer);
+
+      function animate() {
+        window.requestAnimationFrame(animate);
+        controls.update();
+        const audio = window.jarvisAudio;
+        let amplitude = 0;
+        if (audio && audio.active && audio.analyser) {
+          const samples = audio.samples || (audio.samples = new Uint8Array(audio.analyser.fftSize));
+          audio.analyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (let i = 0; i < samples.length; i += 1) {
+            const sample = (samples[i] - 128) / 128;
+            sum += sample * sample;
+          }
+          amplitude = Math.min(1, Math.sqrt(sum / samples.length) * 4);
+        }
+        if (audio) {
+          audio.speechLevel *= 0.92;
+          amplitude = Math.max(amplitude, audio.speechLevel);
+        }
+        const smoothedAmplitude = audio
+          ? (audio.level = audio.level * 0.78 + amplitude * 0.22)
+          : amplitude;
+        const activity = audio && (audio.active || audio.speaking);
+        const visualLevel = activity ? smoothedAmplitude : 0;
+        const rotationSpeed = 1 + visualLevel * 4;
+
+        reactor.rotation.x += 0.0015 * rotationSpeed;
+        reactor.rotation.y += 0.002 * rotationSpeed;
+        reactor.rotation.z += 0.0007 * rotationSpeed;
+        reactorRings.forEach((ring, index) => {
+          const direction = index % 2 === 0 ? 1 : -1;
+          ring.rotation.x += direction * (0.0012 + index * 0.0003) * rotationSpeed;
+          ring.rotation.y -= direction * (0.0015 + index * 0.0002) * rotationSpeed;
+        });
+        containmentRing.rotation.z += 0.0005 * rotationSpeed;
+        containmentDots.rotation.z -= 0.0007 * rotationSpeed;
+        containmentDots.scale.setScalar(activeMode === "REACTOR" ? 1 + visualLevel * 0.75 : 1);
+        globe.rotation.y += 0.0015 * rotationSpeed;
+        globe.rotation.x = Math.sin(Date.now() * 0.00018) * 0.04;
+        reactorCore.rotation.y += 0.002 * rotationSpeed;
+        globeRings[0].rotation.y += 0.002 * rotationSpeed;
+        globeRings[1].rotation.x -= 0.0018 * rotationSpeed;
+        globeRings[2].rotation.y += 0.0015 * rotationSpeed;
+        globeRings[3].rotation.x -= 0.001 * rotationSpeed;
+        globeRings[4].rotation.z += 0.0008 * rotationSpeed;
+        globeRings[5].rotation.x -= 0.0006 * rotationSpeed;
+        pulseMarkers.forEach((marker, index) => {
+          const pulse = 1 + (Math.sin(Date.now() * 0.004 * rotationSpeed + index) + 1)
+            * (0.4 + visualLevel * 0.3);
+          marker.scale.setScalar(pulse);
+        });
+        metricsNodes.forEach((node) => {
+          node.rotation.x += 0.003 * rotationSpeed;
+          node.rotation.y += 0.004 * rotationSpeed;
+          const pulse = 0.9 + (Math.sin(Date.now() * 0.002 + node.userData.phase) + 1) * 0.08;
+          node.scale.setScalar(pulse);
+        });
+        particles.rotation.y -= 0.0005 * rotationSpeed;
+        particles.scale.setScalar(activeMode === "GLOBE" ? 1 + visualLevel * 0.75 : 1);
+        modeContent[activeMode].scale.setScalar(1 + visualLevel * 0.14);
+        bloomPass.strength = Math.min(0.6, 0.5 + visualLevel * 0.1);
+        composer.render();
+      }
+
+      animate();
+    })();
+  </script>
+  <script>
+    (() => {
+      const destinations = {
+        youtube: { label: "YouTube", url: "https://www.youtube.com", aliases: ["youtube", "you tube"] },
+        google: { label: "Google", url: "https://www.google.com", aliases: ["google"] },
+        gmail: { label: "Gmail", url: "https://mail.google.com", aliases: ["gmail", "g mail"] },
+        github: { label: "GitHub", url: "https://github.com", aliases: ["github", "git hub"] },
+        spotify: { label: "Spotify", url: "https://open.spotify.com", aliases: ["spotify"] },
+        wikipedia: { label: "Wikipedia", url: "https://www.wikipedia.org", aliases: ["wikipedia", "wiki"] },
+        reddit: { label: "Reddit", url: "https://www.reddit.com", aliases: ["reddit"] },
+        netflix: { label: "Netflix", url: "https://www.netflix.com", aliases: ["netflix"] },
+        amazon: { label: "Amazon", url: "https://www.amazon.com", aliases: ["amazon"] },
+        maps: { label: "Maps", url: "https://maps.google.com", aliases: ["maps", "google maps"] }
+      };
+
+      const micButton = document.getElementById("micButton");
+      const micLabel = document.getElementById("micLabel");
+      const voiceState = document.getElementById("voiceState");
+      const voiceWave = document.querySelector(".monitor-wave");
+      const statusLine = document.getElementById("statusLine");
+      const statusText = document.getElementById("statusText");
+      const message = document.getElementById("message");
+      const commandForm = document.getElementById("commandForm");
+      const commandInput = document.getElementById("commandInput");
+      const clock = document.getElementById("clock");
+      const weatherClock = document.getElementById("weatherClock");
+      const transcriptFeed = document.getElementById("transcriptFeed");
+      const activityChart = document.getElementById("activityChart");
+      const activityValues = Array.from({ length: 48 }, () => 0);
+      const coreConnection = document.getElementById("coreConnection");
+      const coreListening = document.getElementById("coreListening");
+      const hudPulse = document.querySelector(".hud-pulse");
+      const cpuGauge = document.getElementById("cpuGauge");
+      const cpuValue = document.getElementById("cpuValue");
+      const cpuMeter = document.getElementById("cpuMeter");
+      const ramGauge = document.getElementById("ramGauge");
+      const ramValue = document.getElementById("ramValue");
+      const ramMeter = document.getElementById("ramMeter");
+      const muteAction = document.getElementById("muteAction");
+      let audioMuted = false;
+      let lastStats = null;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      let listening = false;
+      let assistantSpeaking = false;
+      let recognitionRunning = false;
+      let silenceTimer = null;
+      let interimTranscript = "";
+      let lastSilenceChunk = "";
+      let lastSilenceChunkAt = 0;
+      let currentUtterance = null;
+      let audioContext = null;
+      let microphoneStream = null;
+      let telemetrySocket = null;
+      const pendingTranscripts = [];
+
+      function drawActivityChart() {
+        const bounds = activityChart.getBoundingClientRect();
+        if (!bounds.width || !bounds.height) return;
+        const pixelRatio = window.devicePixelRatio || 1;
+        activityChart.width = Math.round(bounds.width * pixelRatio);
+        activityChart.height = Math.round(bounds.height * pixelRatio);
+        const context = activityChart.getContext("2d");
+        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        const width = bounds.width;
+        const height = bounds.height;
+        context.clearRect(0, 0, width, height);
+        context.strokeStyle = "rgba(93, 206, 229, .13)";
+        context.lineWidth = 1;
+        for (let row = 1; row < 4; row += 1) {
+          const y = Math.round(height * row / 4) + 0.5;
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+          context.stroke();
+        }
+        const points = activityValues.slice(-48);
+        if (points.length < 2) return;
+        context.beginPath();
+        points.forEach((value, index) => {
+          const x = index / (points.length - 1) * width;
+          const y = height - 4 - Math.max(0, Math.min(100, value)) / 100 * (height - 8);
+          if (index === 0) context.moveTo(x, y);
+          else context.lineTo(x, y);
+        });
+        context.strokeStyle = "#63e7ff";
+        context.shadowColor = "rgba(99, 231, 255, .75)";
+        context.shadowBlur = 7;
+        context.lineWidth = 1.5;
+        context.stroke();
+        context.shadowBlur = 0;
+      }
+
+      function recordActivity(value) {
+        activityValues.push(Math.max(0, Math.min(100, value)));
+        if (activityValues.length > 48) activityValues.shift();
+        drawActivityChart();
+      }
+
+      window.addEventListener("resize", drawActivityChart);
+      window.requestAnimationFrame(drawActivityChart);
+
+      async function startAudioMonitor() {
+        if (audioContext && microphoneStream) {
+          if (audioContext.state === "suspended") await audioContext.resume();
+          return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error("Live audio visualization requires microphone access on HTTPS or localhost.");
+        }
+
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) throw new Error("This browser does not support the Web Audio API.");
+
+        audioContext = new AudioContextClass();
+        try {
+          if (audioContext.state === "suspended") await audioContext.resume();
+          microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          });
+          const source = audioContext.createMediaStreamSource(microphoneStream);
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 512;
+          analyser.smoothingTimeConstant = 0.8;
+          source.connect(analyser);
+          window.jarvisAudio.analyser = analyser;
+        } catch (error) {
+          if (microphoneStream) {
+            microphoneStream.getTracks().forEach((track) => track.stop());
+            microphoneStream = null;
+          }
+          await audioContext.close();
+          audioContext = null;
+          throw error;
+        }
+      }
+
+      function stopAudioMonitor() {
+        window.jarvisAudio.active = false;
+        window.jarvisAudio.analyser = null;
+        window.jarvisAudio.samples = null;
+        if (microphoneStream) {
+          microphoneStream.getTracks().forEach((track) => track.stop());
+          microphoneStream = null;
+        }
+        if (audioContext) {
+          const context = audioContext;
+          audioContext = null;
+          context.close().catch((error) => {
+            appendTranscript("AUDIO", `Could not close audio monitor: ${error.message}`);
+          });
+        }
+      }
+
+      function appendTranscript(source, text) {
+        const line = document.createElement("div");
+        line.className = "transcript-line";
+        const time = document.createElement("time");
+        time.textContent = new Intl.DateTimeFormat(undefined, {
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+        }).format(new Date());
+        const label = document.createElement("strong");
+        label.textContent = source;
+        line.append(time, label, document.createTextNode(` ${text}`));
+        transcriptFeed.append(line);
+        while (transcriptFeed.children.length > 30) transcriptFeed.firstElementChild.remove();
+        transcriptFeed.scrollTop = transcriptFeed.scrollHeight;
+        recordActivity(source === "CORE" ? 72 : source === "YOU" ? 88 : 48);
+      }
+
+      function updateTelemetry(stats) {
+        if (!stats || typeof stats.cpu_percent !== "number"
+          || typeof stats.ram_used_gb !== "number"
+          || typeof stats.ram_total_gb !== "number") return;
+        lastStats = stats;
+        const cpu = Math.max(0, Math.min(100, stats.cpu_percent));
+        const ram = stats.ram_total_gb > 0
+          ? Math.max(0, Math.min(100, stats.ram_used_gb / stats.ram_total_gb * 100))
+          : 0;
+        cpuValue.textContent = `${cpu.toFixed(0)}%`;
+        cpuGauge.style.width = `${cpu}%`;
+        cpuMeter.setAttribute("aria-valuenow", cpu.toFixed(0));
+        ramValue.textContent = `${ram.toFixed(0)}%`;
+        ramGauge.style.width = `${ram}%`;
+        ramMeter.setAttribute("aria-valuenow", ram.toFixed(0));
+        recordActivity(cpu);
+      }
+
+      function connectTelemetry() {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const socket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        telemetrySocket = socket;
+        socket.addEventListener("open", () => {
+          coreConnection.textContent = "ONLINE";
+          hudPulse.classList.remove("offline");
+          appendTranscript("LINK", "Telemetry connection established.");
+          while (pendingTranscripts.length && socket.readyState === WebSocket.OPEN) {
+            socket.send(pendingTranscripts.shift());
+          }
+        });
+        socket.addEventListener("message", (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            if (payload.type === "system_stats") updateTelemetry(payload.data);
+            else if (payload.type === "response") {
+              if (typeof payload.ui_mode === "string") switchMode(payload.ui_mode);
+              const responseText = typeof payload.response_text === "string"
+                ? payload.response_text
+                : payload.text;
+              if (typeof responseText === "string") {
+                appendTranscript("CORE", responseText);
+                speakResponse(responseText);
+              }
+            }
+          } catch (error) {
+            appendTranscript("SERVER", event.data);
+          }
+        });
+        socket.addEventListener("close", () => {
+          if (telemetrySocket === socket) telemetrySocket = null;
+          coreConnection.textContent = "OFFLINE";
+          hudPulse.classList.add("offline");
+          window.setTimeout(connectTelemetry, 3000);
+        });
+        socket.addEventListener("error", () => socket.close());
+      }
+
+      connectTelemetry();
+
+      function updateClock() {
+        const time = new Intl.DateTimeFormat(undefined, {
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+        }).format(new Date());
+        clock.textContent = time;
+        weatherClock.textContent = time;
+      }
+      updateClock();
+      window.setInterval(updateClock, 1000);
+
+      function setStatus(label, detail, active = false) {
+        if (statusLine) statusLine.classList.toggle("listening", active);
+        statusText.textContent = `${label} · ${detail}`;
+      }
+
+      function setVoicePhase(phase) {
+        const states = {
+          LISTENING: ["LISTENING...", "Voice channel active", "Speak naturally"],
+          THINKING: ["THINKING...", "Processing your request", "Stand by"],
+          SPEAKING: ["SPEAKING...", "Response in progress", "Audio output active"],
+          STANDBY: ["STANDBY", "All systems nominal", "Awaiting your command"]
+        };
+        const [label, detail, hint] = states[phase] || states.STANDBY;
+        voiceState.textContent = label;
+        voiceState.dataset.phase = phase;
+        if (voiceWave) voiceWave.dataset.phase = phase;
+        coreListening.textContent = label;
+        setStatus(label, detail, phase === "LISTENING");
+        message.textContent = hint;
+      }
+
+      function setListening(active) {
+        listening = active;
+        window.jarvisAudio.active = active;
+        micButton.classList.toggle("listening", active);
+        micLabel.textContent = active ? "STOP" : "VOICE";
+        micButton.setAttribute("aria-label", active ? "Stop voice recognition" : "Activate continuous voice recognition");
+        if (!active) {
+          if (silenceTimer) window.clearTimeout(silenceTimer);
+          silenceTimer = null;
+          interimTranscript = "";
+          stopAudioMonitor();
+          if (!assistantSpeaking) setVoicePhase("STANDBY");
+        } else if (!assistantSpeaking) {
+          setVoicePhase("LISTENING");
+        }
+      }
+
+      function sendTranscript(transcript) {
+        const payload = JSON.stringify({
+          type: "transcript",
+          text: transcript,
+          speech_output: window.speechSynthesis ? "browser" : "server"
+        });
+        if (telemetrySocket && telemetrySocket.readyState === WebSocket.OPEN) {
+          telemetrySocket.send(payload);
+          return true;
+        }
+        if (pendingTranscripts.length >= 20) {
+          appendTranscript("ERROR", "Transcript queue is full; reconnect before speaking more.");
+          return false;
+        }
+        pendingTranscripts.push(payload);
+        appendTranscript("LINK", "Transcript queued until the server reconnects.");
+        return true;
+      }
+
+      function startRecognitionIfNeeded() {
+        if (!listening || assistantSpeaking || !recognition || recognitionRunning) return;
+        try {
+          recognition.start();
+          recognitionRunning = true;
+        } catch (error) {
+          if (error.name !== "InvalidStateError") {
+            message.textContent = `Could not resume voice recognition: ${error.message}`;
+          }
+        }
+      }
+
+      function finishSpeech(utterance) {
+        if (currentUtterance !== utterance) return;
+        currentUtterance = null;
+        assistantSpeaking = false;
+        window.jarvisAudio.speaking = false;
+        window.jarvisAudio.active = listening;
+        if (listening) {
+          setVoicePhase("LISTENING");
+          window.setTimeout(startRecognitionIfNeeded, 180);
+        } else {
+          setVoicePhase("STANDBY");
+        }
+      }
+
+      function speakResponse(text) {
+        if (audioMuted || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+          setVoicePhase(listening ? "LISTENING" : "STANDBY");
+          return;
+        }
+        if (listening && recognition && recognitionRunning) {
+          recognition.stop();
+        }
+        if (currentUtterance) {
+          currentUtterance.onend = null;
+          currentUtterance.onerror = null;
+          currentUtterance = null;
+        }
+        window.speechSynthesis.cancel();
+        assistantSpeaking = true;
+        window.jarvisAudio.speaking = true;
+        window.jarvisAudio.active = false;
+        window.jarvisAudio.speechLevel = 0.22;
+        setVoicePhase("SPEAKING");
+        const utterance = new SpeechSynthesisUtterance(text);
+        currentUtterance = utterance;
+        utterance.lang = navigator.language || "en-US";
+        // SpeechSynthesis output is not exposed to Web Audio; use word events for its envelope.
+        utterance.onboundary = (event) => {
+          if (event.name === "word") window.jarvisAudio.speechLevel = 0.8;
+        };
+        utterance.onend = () => finishSpeech(utterance);
+        utterance.onerror = (event) => {
+          if (event.error !== "canceled" && event.error !== "interrupted") {
+            appendTranscript("AUDIO", `Speech output failed: ${event.error}.`);
+          }
+          finishSpeech(utterance);
+        };
+        try {
+          window.speechSynthesis.speak(utterance);
+        } catch (error) {
+          appendTranscript("AUDIO", `Speech output failed: ${error.message}.`);
+          finishSpeech(utterance);
+        }
+      }
+
+      function dispatchTranscript(transcript) {
+        const normalized = transcript.toLowerCase().replace(/[.,!?]/g, "").trim();
+        if (/^(?:(?:hey|ok(?:ay)?)\s+)?jarvis$/.test(normalized)) {
+          appendTranscript("CORE", "I'm listening. What can I do for you?");
+          setVoicePhase("LISTENING");
+          return;
+        }
+
+        appendTranscript("YOU", transcript);
+        setVoicePhase("THINKING");
+        sendTranscript(transcript);
+        const destination = resolveDestination(transcript);
+        if (destination && !destination.unknown) executeCommand(transcript);
+        setVoicePhase("THINKING");
+      }
+
+      function resolveDestination(command) {
+        const normalized = command.toLowerCase().replace(/[.,!?]/g, " ").replace(/\s+/g, " ").trim();
+        const cleaned = normalized.replace(/^(?:(?:hey|ok(?:ay)?)\s+)?jarvis[\s,:-]*/, "").trim();
+        const openMatch = cleaned.match(/^(?:please\s+)?(?:open|go to|launch|navigate to)\s+(.+)$/);
+        if (!openMatch) return null;
+        const requested = openMatch[1].trim();
+        for (const [name, site] of Object.entries(destinations)) {
+          if (site.aliases.includes(requested) || requested === name) {
+            return { name, label: site.label, url: site.url };
+          }
+        }
+        return { unknown: requested };
+      }
+
+      function executeCommand(command) {
+        const destination = resolveDestination(command);
+        if (!destination || destination.unknown) return false;
+
+        setStatus("Command complete", `Opening ${destination.label}`);
+        appendTranscript("CORE", `Opening ${destination.label}.`);
+
+        const tab = window.open(destination.url, "_blank");
+        if (tab) {
+          tab.opener = null;
+          message.textContent = `${destination.label} opened in a new tab.`;
+        } else {
+          message.textContent = `Opening ${destination.label} in this tab because the browser blocked a new tab.`;
+          window.location.assign(destination.url);
+        }
+        return true;
+      }
+
+      document.getElementById("scanAction").addEventListener("click", async () => {
+        appendTranscript("SCAN", "Requesting system diagnostics.");
+        try {
+          const response = await fetch("/api/system/stats");
+          if (!response.ok) throw new Error(`Diagnostics request failed (${response.status}).`);
+          const stats = await response.json();
+          updateTelemetry(stats);
+          appendTranscript("SCAN", `CPU ${stats.cpu_percent.toFixed(0)}% · RAM ${stats.ram_used_gb.toFixed(2)} / ${stats.ram_total_gb.toFixed(2)} GB.`);
+        } catch (error) {
+          appendTranscript("ERROR", error.message || "System scan failed.");
+        }
+      });
+
+      document.getElementById("rebootAction").addEventListener("click", () => {
+        appendTranscript("CORE", "Reinitializing the AI connection.");
+        coreConnection.textContent = "RESTARTING";
+        if (telemetrySocket) telemetrySocket.close(1000, "AI link reset requested");
+        else window.setTimeout(connectTelemetry, 0);
+      });
+
+      muteAction.addEventListener("click", () => {
+        audioMuted = !audioMuted;
+        document.querySelectorAll("audio, video").forEach((media) => {
+          media.muted = audioMuted;
+        });
+        if (audioMuted && window.speechSynthesis) {
+          window.speechSynthesis.cancel();
+          if (currentUtterance) finishSpeech(currentUtterance);
+        }
+        muteAction.setAttribute("aria-pressed", String(audioMuted));
+        muteAction.textContent = audioMuted ? "UNMUTE AUDIO" : "MUTE AUDIO";
+        appendTranscript("AUDIO", audioMuted ? "Audio muted." : "Audio unmuted.");
+      });
+
+      document.getElementById("clearAction").addEventListener("click", () => {
+        transcriptFeed.replaceChildren();
+        appendTranscript("CORE", "Context log cleared.");
+      });
+
+      async function startListening() {
+        if (!SpeechRecognition) {
+          message.textContent = "Speech recognition is not supported in this browser. Use the command box below, or try Chrome or Edge.";
+          setStatus("Voice unavailable", "Browser speech recognition is unsupported");
+          return;
+        }
+        try {
+          await startAudioMonitor();
+        } catch (error) {
+          message.textContent = `Audio-reactive visuals unavailable: ${error.message}`;
+          appendTranscript("AUDIO", error.message);
+        }
+        recognition = new SpeechRecognition();
+        recognition.lang = navigator.language || "en-US";
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.onstart = () => {
+          recognitionRunning = true;
+          setListening(true);
+          setVoicePhase("LISTENING");
+        };
+        recognition.onresult = (event) => {
+          const finalChunks = [];
+          for (let i = event.resultIndex; i < event.results.length; i += 1) {
+            const result = event.results[i];
+            const transcript = result[0].transcript.trim();
+            if (!transcript) continue;
+            if (result.isFinal) {
+              finalChunks.push(transcript);
+            } else {
+              interimTranscript = transcript;
+              message.textContent = `Listening: “${transcript}”`;
+            }
+          }
+          if (finalChunks.length) {
+            if (silenceTimer) window.clearTimeout(silenceTimer);
+            silenceTimer = null;
+            interimTranscript = "";
+            finalChunks.forEach((transcript) => {
+              const normalized = transcript.toLowerCase().replace(/[.,!?]/g, "").trim();
+              const repeatedSilenceChunk = normalized === lastSilenceChunk
+                && Date.now() - lastSilenceChunkAt < 2000;
+              if (repeatedSilenceChunk) {
+                lastSilenceChunk = "";
+                return;
+              }
+              dispatchTranscript(transcript);
+            });
+          } else if (interimTranscript) {
+            if (silenceTimer) window.clearTimeout(silenceTimer);
+            silenceTimer = window.setTimeout(() => {
+              const transcript = interimTranscript;
+              interimTranscript = "";
+              silenceTimer = null;
+              if (!transcript || !listening || assistantSpeaking) return;
+              lastSilenceChunk = transcript.toLowerCase().replace(/[.,!?]/g, "").trim();
+              lastSilenceChunkAt = Date.now();
+              dispatchTranscript(transcript);
+            }, 750);
+          }
+        };
+        recognition.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            setListening(false);
+            message.textContent = "Microphone access was denied. Allow microphone access in your browser settings, then try again.";
+            setVoicePhase("STANDBY");
+          } else if (event.error === "no-speech") {
+            setVoicePhase("LISTENING");
+          } else {
+            message.textContent = `Voice recognition error: ${event.error}. You can still type a command below.`;
+            setVoicePhase(listening ? "LISTENING" : "STANDBY");
+          }
+        };
+        recognition.onend = () => {
+          recognitionRunning = false;
+          if (listening && !assistantSpeaking) window.setTimeout(startRecognitionIfNeeded, 180);
+        };
+        try {
+          recognition.start();
+          recognitionRunning = true;
+        } catch (error) {
+          recognitionRunning = false;
+          setListening(false);
+          message.textContent = `Could not start voice recognition: ${error.message}`;
+        }
+      }
+
+      micButton.addEventListener("click", () => {
+        if (listening && recognition) {
+          recognition.stop();
+          setListening(false);
+          return;
+        }
+        startListening().catch((error) => {
+          setListening(false);
+          message.textContent = `Could not start voice recognition: ${error.message}`;
+          appendTranscript("ERROR", error.message);
+        });
+      });
+
+      commandForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const command = commandInput.value.trim();
+        if (!command) {
+          message.textContent = "Enter a command first, such as “open YouTube”.";
+          commandInput.focus();
+          return;
+        }
+        dispatchTranscript(command);
+        commandInput.select();
+      });
+    })();
+  </script>
+</body>
+</html>
